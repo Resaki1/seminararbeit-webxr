@@ -19,7 +19,7 @@ const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
   const { gl, scene } = useThree();
   const { session } = useXR();
 
-  useFrame((state, delta, frame: XRFrame) => {
+  useFrame((_state, _delta, frame: XRFrame) => {
     if (!session) return;
 
     if (lightProbe.current) {
