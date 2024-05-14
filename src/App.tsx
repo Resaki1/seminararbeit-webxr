@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ARButton, XR } from "@react-three/xr";
 import { Canvas } from "@react-three/fiber";
+import { Analytics } from "@vercel/analytics/react";
 import "./App.css";
 import ARScene from "./ARScene";
 
@@ -47,6 +48,7 @@ function App() {
           place
         </button>
       </div>
+      <Analytics />
     </>
   );
 }
