@@ -1,5 +1,5 @@
-import { useFrame } from "@react-three/fiber";
-import { useXR } from "@react-three/xr";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useHitTest } from "@react-three/xr";
 import { useEffect, useRef } from "react";
 import { Matrix4, Mesh } from "three";
 
@@ -10,62 +10,56 @@ interface ARSceneProps {
 const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
   const boxRef = useRef<Mesh>(null!);
 
-  const xrHitTestSource = useRef<XRHitTestSource>();
-  const xrViewerSpace = useRef<XRReferenceSpace | XRBoundedReferenceSpace>();
-  const xrRefSpace = useRef<XRReferenceSpace | XRBoundedReferenceSpace>();
+  const xrAnchor = useRef<XRAnchor>();
+  const lastHitRef = useRef<XRHitTestResult>(null!);
 
-  const { session } = useXR();
+  const { gl } = useThree();
 
-  useEffect(() => {
-    if (session) {
-      session.requestReferenceSpace("viewer").then((refSpace) => {
-        xrViewerSpace.current = refSpace;
-        if (
-          xrViewerSpace.current &&
-          session.requestHitTestSource !== undefined
-        ) {
-          session
-            .requestHitTestSource({ space: xrViewerSpace.current })!
-            .then((hitTestSource) => {
-              xrHitTestSource.current = hitTestSource;
-            });
-        }
-      });
+  useFrame((state, delta, frame: XRFrame) => {
+    const referenceSpace = gl.xr.getReferenceSpace();
+    if (!xrAnchor.current || !referenceSpace) return;
 
-      session.requestReferenceSpace("local").then((refSpace) => {
-        xrRefSpace.current = refSpace;
-      });
+    if (!frame.trackedAnchors || !frame.trackedAnchors.has(xrAnchor.current))
+      return;
+
+    const anchorPose = frame.getPose(
+      xrAnchor.current.anchorSpace,
+      referenceSpace
+    );
+    if (anchorPose) {
+      boxRef.current.matrix = new Matrix4().fromArray(
+        anchorPose.transform.matrix
+      );
+      console.log(boxRef.current.matrix);
     }
-  }, [session]);
+  });
 
-  useFrame((state, delta, frame) => {
-    if (!frame) return;
+  useHitTest((hitMatrix, hit) => {
+    if (xrAnchor.current) return;
 
-    const pose = frame.getViewerPose(xrRefSpace.current);
+    const referenceSpace = gl.xr.getReferenceSpace();
+    if (referenceSpace) {
+      lastHitRef.current = hit;
+    }
 
-    if (xrHitTestSource && pose) {
-      const hitTestResults = frame.getHitTestResults(xrHitTestSource.current);
-      if (hitTestResults.length > 0) {
-        const pose = hitTestResults[0].getPose(xrRefSpace.current);
+    boxRef.current.visible = true;
 
-        boxRef.current.visible = true;
-        const hitMatrix = new Matrix4().fromArray(pose.transform.matrix);
-        hitMatrix.decompose(
-          boxRef.current.position,
-          boxRef.current.quaternion,
-          boxRef.current.scale
-        );
-      } else boxRef.current.visible = false;
-    } else boxRef.current.visible = false;
+    hitMatrix.decompose(
+      boxRef.current.position,
+      boxRef.current.quaternion,
+      boxRef.current.scale
+    );
   });
 
   useEffect(() => {
-    const handlePlaceObject = () => {
-      console.log("ARScene: Object placed!");
-    };
+    const referenceSpace = gl.xr.getReferenceSpace();
+    if (!lastHitRef.current?.createAnchor || !referenceSpace) return;
 
-    handlePlaceObject();
-  }, [placedObjectsCount]);
+    const hitTestPose = lastHitRef.current.getPose(referenceSpace);
+    lastHitRef.current.createAnchor(hitTestPose!.transform)?.then((anchor) => {
+      xrAnchor.current = anchor;
+    });
+  }, [gl.xr, placedObjectsCount]);
 
   return (
     <mesh ref={boxRef} visible={false}>
