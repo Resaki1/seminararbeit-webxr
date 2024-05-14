@@ -93,6 +93,8 @@ const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
     };
   }, [gl, scene, session]);
 
+  if (!session) return;
+
   return (
     <>
       <directionalLight ref={virtualLight} visible={false} color={"white"} />
