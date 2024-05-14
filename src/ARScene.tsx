@@ -1,7 +1,8 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useHitTest } from "@react-three/xr";
+import { useHitTest, useXR } from "@react-three/xr";
 import { useEffect, useRef } from "react";
-import { Matrix4, Mesh } from "three";
+import { DirectionalLight, Matrix4, Mesh } from "three";
+import { XREstimatedLight } from "three/examples/jsm/Addons.js";
 
 interface ARSceneProps {
   placedObjectsCount: number;
@@ -12,10 +13,20 @@ const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
 
   const xrAnchor = useRef<XRAnchor>();
   const lastHitRef = useRef<XRHitTestResult>(null!);
+  const virtualLight = useRef<DirectionalLight>(null!);
+  const lightProbe = useRef<XREstimatedLight>();
 
-  const { gl } = useThree();
+  const { gl, scene } = useThree();
+  const { session } = useXR();
 
   useFrame((state, delta, frame: XRFrame) => {
+    if (!session) return;
+
+    if (lightProbe.current) {
+      virtualLight.current.visible = true;
+      virtualLight.current = lightProbe.current.directionalLight;
+    }
+
     const referenceSpace = gl.xr.getReferenceSpace();
     if (!xrAnchor.current || !referenceSpace) return;
 
@@ -30,7 +41,6 @@ const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
       boxRef.current.matrix = new Matrix4().fromArray(
         anchorPose.transform.matrix
       );
-      console.log(boxRef.current.matrix);
     }
   });
 
@@ -54,18 +64,43 @@ const ARScene = ({ placedObjectsCount }: ARSceneProps) => {
   useEffect(() => {
     const referenceSpace = gl.xr.getReferenceSpace();
     if (!lastHitRef.current?.createAnchor || !referenceSpace) return;
-
     const hitTestPose = lastHitRef.current.getPose(referenceSpace);
     lastHitRef.current.createAnchor(hitTestPose!.transform)?.then((anchor) => {
       xrAnchor.current = anchor;
     });
   }, [gl.xr, placedObjectsCount]);
 
+  useEffect(() => {
+    const xrLight = new XREstimatedLight(gl, true);
+
+    xrLight.addEventListener("estimationstart", () => {
+      scene.add(xrLight);
+      lightProbe.current = xrLight;
+      if (xrLight) {
+        scene.environment = xrLight.environment;
+        virtualLight.current.visible = true;
+        virtualLight.current = xrLight.directionalLight;
+      }
+    });
+
+    xrLight.addEventListener("estimationend", () => {
+      scene.remove(xrLight);
+      scene.environment = null;
+    });
+
+    return () => {
+      scene.remove(xrLight);
+    };
+  }, [gl, scene, session]);
+
   return (
-    <mesh ref={boxRef} visible={false}>
-      <boxGeometry args={[0.1, 0.1, 0.1]} />
-      <meshBasicMaterial color="blue" />
-    </mesh>
+    <>
+      <directionalLight ref={virtualLight} visible={false} color={"white"} />
+      <mesh ref={boxRef} visible={false}>
+        <sphereGeometry args={[0.175, 32, 32]} />
+        <meshStandardMaterial color={0xdddddd} roughness={0} metalness={1} />
+      </mesh>
+    </>
   );
 };
 

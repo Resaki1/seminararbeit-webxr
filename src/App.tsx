@@ -20,7 +20,13 @@ function App() {
       {isOverlayReady && (
         <ARButton
           sessionInit={{
-            optionalFeatures: ["local", "dom-overlay", "hit-test", "anchors"],
+            optionalFeatures: [
+              "local",
+              "dom-overlay",
+              "hit-test",
+              "anchors",
+              "light-estimation",
+            ],
             domOverlay: {
               root: overlayRef.current,
             },
